@@ -1,13 +1,20 @@
 from __future__ import print_function
 import serial
-from time import sleep
 import re
+from time import sleep
 from datetime import datetime
 
 class SERIAL_TESTER:
-    def __init__(self, tty_name, baudrate):
+    def __init__(self, tty_name = "/dev/ttyS0", baudrate = 115200):
         self.ser = serial.Serial()
         self.ser.port = tty_name
+
+        self.userstring     = "Username:"
+        self.passwdstring   = "Password:"
+        self.continuestring = "-- more --, next page: Space, continue: g, quit: ^C"
+        self.linegreeting   = "[0-9,a-z,A-Z]*@[0-9,a-z,A-Z,(,)]*#"
+        self.debug = False
+        self.print = True
 
         self.serConf(baudrate)
         self.ser.open()
@@ -32,31 +39,35 @@ class SERIAL_TESTER:
         time = datetime.now()
         return (time.microsecond) + (time.second * pow(10,6)) + (time.minute * 60 * pow(10,6)) + (time.hour * 60 * 60 * pow(10,6))
 
-    def cmdin(self, cmdstr = "", debug = False):
+    def millis(self):
+        return self.micros() / 1000
+
+    def cmdin(self, cmdstr = ""):
         sendstr = cmdstr + "\r\n"
-        if debug:
+        if self.debug:
             print("send: %s" % repr(sendstr))
         length = self.ser.write(sendstr) - 2
         return length
 
-    def cmdout(self, begin, end, timeout = 5000000, debug = False):
+    def cmdout(self, begin, end = None, timeout = 5000):
+        end = end if end else self.linegreeting
         out     = False
         todo    = True
         success = True
         full    = ""
-        outtime = self.micros() + timeout
+        outtime = self.millis() + timeout
         while todo:
             line = self.ser.readline()
             # check timeout
             if timeout != 0:
-                if outtime < self.micros():
+                if outtime < self.millis():
                     todo = False
                     success = False
             # check buffer size
             if (len(line) == 0):
                 continue
             # print debug
-            if debug:
+            if self.debug:
                 print("receive: %s" % repr(line))
 
             if line == self.continuestring:
@@ -64,14 +75,14 @@ class SERIAL_TESTER:
             # check end regex
             if end is not None:
                 if out or begin is None:
-                    if debug:
+                    if self.debug:
                         print("end: %s line: %s" % (end, repr(line)))
                     if re.search(end, line) is not None:
                         todo = False
             # check begin regex
             if begin is not None:
                 if not out:
-                    if debug:
+                    if self.debug:
                         print("begin: %s line: %s" % (begin, repr(line)))
                     if re.search(begin, line) is not None:
                         out = True
@@ -84,44 +95,57 @@ class SERIAL_TESTER:
         # print(full)
         return success
 
-    def checklive(self, timeout = 1000000, debug = False):
-        self.cmdin(debug = debug)
-        return self.cmdout(None, self.linegreeting, timeout, debug)
+    def cmdinout(self, cmdin, cmdout = None, timeout = 5000):
+        self.cmdin(cmdin)
+        cmdin = self.escapchar(cmdin)
+        self.cmdout(cmdin, cmdout, timeout)
+        pass
 
-    def login(self, user = "admin", passwd = "admin", timeout = 1000000, debug = False):
+    def checklive(self, timeout = 1000):
+        self.cmdin()
+        return self.cmdout(None, self.linegreeting, timeout)
+
+    def login(self, user = "admin", passwd = "admin", timeout = 1000):
         if self.checklive(timeout):
+            print("already login")
             return True
-        self.cmdin(debug = debug);
+        self.cmdin();
         while True:
-            br = self.cmdout(None, self.userstring, timeout, debug)
+            br = self.cmdout(None, self.userstring, timeout)
             if br:
                 break
             else:
-                self.cmdin(debug = debug)
+                self.cmdin()
                 
-        self.cmdin("admin", debug)
+        self.cmdin(user)
         while True:
-            br = self.cmdout(None, self.passwdstring, timeout, debug)
+            br = self.cmdout(None, self.passwdstring, timeout)
             if br:
                 break
             else:
-                self.cmdin(debug = debug)
-        self.cmdin("admin", debug)
-        return self.checklive(timeout)
+                self.cmdin()
+        self.cmdin(passwd)
+        login = self.checklive(timeout)
+        if login:
+            print("login successful")
+        return
 
+    # add escaping characters
+    def escapchar(self, string):
+        return string.replace("*", "\*")
 
-sr = SERIAL_TESTER("/dev/ttyUSB0", 115200)
-sr.userstring     = "Username:"
-sr.passwdstring   = "Password:"
-sr.continuestring = "-- more --, next page: Space, continue: g, quit: ^C"
-sr.linegreeting   = "[0-9,a-z,A-Z]*@[0-9,a-z,A-Z,(,)]*#"
+    def debugallow(self):
+        self.debug = True
 
+    def debugdeny(self):
+        self.debug = False
 
-sr.login()
+def test():
+    sr = SERIAL_TESTER("/dev/ttyUSB0")
+    sr.login()
 
-for x in xrange(1,10):
-    print("TEST %d" % x)
-    sr.cmdin("ver")
-    print(sr.cmdout("ver", sr.linegreeting, 60 * pow(10,6)))
+    for x in xrange(1,10):
+        print("TEST %d" % x)
+        sr.cmdinout("show version", timeout = 60000)
 
-sr.close()
+    sr.close()
