@@ -12,14 +12,11 @@ class SERIAL_TESTER:
         self.userstring     = "Username:"
         self.passwdstring   = "Password:"
         self.continuestring = "-- more --, next page: Space, continue: g, quit: ^C"
-        self.linegreeting   = "[0-9,a-z,A-Z]*@[0-9,a-z,A-Z,(,)]*#"
+        self.linegreeting   = "[0-9,a-z,A-Z]*@[0-9,a-z,A-Z,(,),-]*#"
         self.debug = False
         self.print = True
 
         self.serConf(baudrate)
-        self.ser.open()
-        self.ser.flushInput()
-        self.ser.flushOutput()
 
     def serConf(self, baudrate):
         self.ser.baudrate = baudrate
@@ -35,6 +32,11 @@ class SERIAL_TESTER:
     def close(self):
         self.ser.close()
 
+    def open(self):
+        self.ser.open()
+        self.ser.flushInput()
+        self.ser.flushOutput()
+
     def micros(self):
         time = datetime.now()
         return (time.microsecond) + (time.second * pow(10,6)) + (time.minute * 60 * pow(10,6)) + (time.hour * 60 * 60 * pow(10,6))
@@ -49,7 +51,7 @@ class SERIAL_TESTER:
         length = self.ser.write(sendstr) - 2
         return length
 
-    def cmdout(self, begin, end = None, timeout = 5000):
+    def cmdout(self, begin, end = None, timeout = 5000, grep = ".*"):
         end = end if end else self.linegreeting
         out     = False
         todo    = True
@@ -83,22 +85,25 @@ class SERIAL_TESTER:
             if begin is not None:
                 if not out:
                     if self.debug:
-                        print("begin: %s line: %s" % (begin, repr(line)))
+                        print("begin: %s line: %s" % (repr(begin), repr(line)))
                     if re.search(begin, line) is not None:
                         out = True
             # print
             if out:
                 if len(line) > 0:
-                    print(line, end='')
-                    full += line
-
-        # print(full)
+                    if grep != ".*":
+                        if re.search(grep, line) != None:
+                            full += line
+            if self.print and not self.debug:
+                print(line, end='')
+        if len(full):
+            success = full
         return success
 
-    def cmdinout(self, cmdin, cmdout = None, timeout = 5000):
+    def cmdinout(self, cmdin, cmdout = None, timeout = 5000, grep = ".*"):
         self.cmdin(cmdin)
         cmdin = self.escapchar(cmdin)
-        self.cmdout(cmdin, cmdout, timeout)
+        self.cmdout(cmdin, cmdout, timeout, grep)
         pass
 
     def checklive(self, timeout = 1000):
@@ -107,7 +112,6 @@ class SERIAL_TESTER:
 
     def login(self, user = "admin", passwd = "admin", timeout = 1000):
         if self.checklive(timeout):
-            print("already login")
             return True
         self.cmdin();
         while True:
@@ -126,9 +130,12 @@ class SERIAL_TESTER:
                 self.cmdin()
         self.cmdin(passwd)
         login = self.checklive(timeout)
-        if login:
-            print("login successful")
-        return
+        return login
+
+    def parse(self, string):
+        string = string.split("\n")
+        for x in string:
+            self.cmdinout(x)
 
     # add escaping characters
     def escapchar(self, string):
@@ -139,6 +146,12 @@ class SERIAL_TESTER:
 
     def debugdeny(self):
         self.debug = False
+
+    def printon(self):
+        self.print = True
+
+    def printoff(self):
+        self.print = False
 
 def test():
     sr = SERIAL_TESTER("/dev/ttyUSB0")
