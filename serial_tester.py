@@ -104,8 +104,7 @@ class SERIAL_TESTER:
     def cmdinout(self, cmdin, cmdout = None, timeout = 5000, grep = ".*"):
         self.cmdin(cmdin)
         cmdin = self.escapchar(cmdin)
-        self.cmdout(cmdin, cmdout, timeout, grep)
-        pass
+        return self.cmdout(cmdin, cmdout, timeout, grep)
 
     def checklive(self, timeout = 1000):
         self.cmdin()
