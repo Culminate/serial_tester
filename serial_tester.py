@@ -13,6 +13,7 @@ class SERIAL_TESTER:
         self.passwdstring   = "Password:"
         self.continuestring = "-- more --, next page: Space, continue: g, quit: ^C"
         self.linegreeting   = "[0-9,a-z,A-Z]*@[0-9,a-z,A-Z,(,),-]*#"
+        self.saveconfstr    = "copy running-config startup-config"
         self.debug = False
         self.print = True
 
@@ -136,6 +137,10 @@ class SERIAL_TESTER:
         string = string.split("\n")
         for x in string:
             self.cmdinout(x)
+
+    def saveconf(self):
+        self.cmdinout("end")
+        self.cmdinout(self.saveconfstr)
 
     # add escaping characters
     def escapchar(self, string):
